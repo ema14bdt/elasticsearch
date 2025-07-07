@@ -143,6 +143,10 @@ createApp({
 			console.log('🔍 Realizando búsqueda:', this.searchQuery)
 
 			try {
+				const textColumns = this.indices
+                    .find(i => i.name === this.selectedIndex)
+                    ?.columns.filter(c => c.type === 'text').map(c => c.name) || []
+
 				const response = await fetch('/search', {
 					method: 'POST',
 					headers: {
@@ -151,7 +155,8 @@ createApp({
 					body: JSON.stringify({
 						index_name: this.selectedIndex,
 						query: this.searchQuery,
-						size: this.searchSize
+						size: this.searchSize,
+                        agg_fields: textColumns
 					})
 				})
 
