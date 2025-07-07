@@ -18,7 +18,7 @@ async def upload_csv(file: UploadFile = File(...), index_name: str = Form(...)):
             "mappings": {
                 "properties": {
                     col: {"type": "double"} if df[col].dtype in ['int64', 'float64']
-                    else {"type": "text", "analyzer": "standard"}
+                    else {"type": "text", "analyzer": "standard", "fields": {"keyword": {"type": "keyword"}}}
                     for col in df.columns
                 }
             }

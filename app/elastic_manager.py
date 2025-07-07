@@ -59,7 +59,7 @@ class ElasticsearchManager:
                 "error_count": len(df)
             }
 
-    def search(self, index_name: str, query: str, size: int = 10) -> Dict[str, Any]:
+    def search(self, index_name: str, query: str, size: int = 10, agg_fields: list[str] = None) -> Dict[str, Any]:
         start_time = time.time()
         try:
             search_body = {
@@ -72,8 +72,16 @@ class ElasticsearchManager:
                     }
                 },
                 "size": size,
-                "highlight": {"fields": {"*": {}}}
+                "highlight": {"fields": {"*": {}}},
+                "aggs": {}
             }
+
+            if agg_fields:
+                for field in agg_fields:
+                    search_body["aggs"][f"{field}_terms"] = {
+                        "terms": {"field": f"{field}.keyword"}
+                    }
+
             response = self.es.search(index=index_name, body=search_body)
             hits = response['hits']
             results = [
@@ -90,7 +98,8 @@ class ElasticsearchManager:
                 "returned_results": len(results),
                 "search_time_seconds": round(time.time() - start_time, 3),
                 "elasticsearch_took_ms": response['took'],
-                "results": results
+                "results": results,
+                "aggregations": response.get('aggregations', {})
             }
         except NotFoundError:
             raise HTTPException(status_code=404, detail=f"Índice '{index_name}' no encontrado")
