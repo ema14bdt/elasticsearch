@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elasticsearch CSV Search</title>
+    
+    <!-- Vue.js 3 CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.prod.min.js"></script>
+    <!-- Axios para peticiones HTTP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.5.0/axios.min.js"></script>
+    <!-- Chart.js para métricas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <!-- Estilos CSS -->
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <!-- Header -->
+            <div class="header">
+                <h1>Elasticsearch CSV Search</h1>
+                <p>Carga archivos CSV y realiza búsquedas inteligentes</p>
+            </div>
+
+            <!-- Alertas -->
+            <div v-if="alert.message" :class="['alert', alert.type === 'success' ? 'alert-success' : 'alert-error']">
+                {{ alert.message }}
+            </div>
+
+            <!-- Contenido principal -->
+            <div class="main-content">
+                <!-- Sección de carga de CSV -->
+                <div class="card">
+                    <h2>Cargar CSV</h2>
+                    <div class="upload-section">
+                        <div class="file-input-wrapper">
+                            <input type="file" @change="handleFileSelect" accept=".csv" ref="fileInput">
+                            <div v-if="!selectedFile">
+                                <p>Arrastra tu archivo CSV aquí o haz clic para seleccionar</p>
+                                <small>Solo archivos .csv permitidos</small>
+                            </div>
+                            <div v-else>
+                                <p>{{ selectedFile.name }}</p>
+                                <small>{{ formatFileSize(selectedFile.size) }}</small>
+                            </div>
+                        </div>
+                        
+                        <div class="input-group">
+                            <label for="indexName">Nombre del índice:</label>
+                            <input 
+                                id="indexName"
+                                v-model="indexName" 
+                                type="text" 
+                                placeholder="ej: empleados, productos, ventas..."
+                                pattern="[a-z0-9_-]+"
+                                title="Solo letras minúsculas, números, guiones y guiones bajos"
+                            >
+                        </div>
+                        
+                        <button 
+                            class="btn" 
+                            @click="uploadCSV" 
+                            :disabled="!selectedFile || !indexName || uploading"
+                        >
+                            {{ uploading ? 'Subiendo...' : 'Subir y crear índice' }}
+                            <span v-if="uploading" class="loading"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Sección de búsqueda -->
+                <div class="card">
+                    <h2>🔍 Buscar</h2>
+                    <div class="search-section">
+                        <!-- Lista de índices disponibles -->
+                        <div v-if="indices.length > 0">
+                            <label>Índices disponibles:</label>
+                            <div class="indices-list">
+                                <div 
+                                    v-for="index in indices" 
+                                    :key="index.name"
+                                    :class="['index-tag', { active: selectedIndex === index.name }]"
+                                    @click="selectIndex(index.name)"
+                                    :title="`${index.docs_count} documentos - ${index.size}`"
+                                >
+                                    {{ index.name }} ({{ index.docs_count }})
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Formulario de búsqueda -->
+                        <div class="search-form">
+                            <div class="input-group">
+                                <label for="searchQuery">Consulta:</label>
+                                <input 
+                                    id="searchQuery"
+                                    v-model="searchQuery" 
+                                    type="text" 
+                                    placeholder="Escribe lo que quieres buscar..."
+                                    @keyup.enter="performSearch"
+                                >
+                            </div>
+                            <div class="input-group">
+                                <label for="searchSize">Resultados:</label>
+                                <input 
+                                    id="searchSize"
+                                    v-model="searchSize" 
+                                    type="number" 
+                                    min="1" 
+                                    max="100"
+                                    style="width: 80px;"
+                                >
+                            </div>
+                            <button 
+                                class="btn" 
+                                @click="performSearch" 
+                                :disabled="!selectedIndex || !searchQuery || searching"
+                            >
+                                {{ searching ? 'Buscando...' : 'Buscar' }}
+                                <span v-if="searching" class="loading"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección de resultados -->
+            <div v-if="searchResults.length > 0 || searchMetrics" class="card results-section">
+                <div class="results-grid">
+                    <!-- Resultados de búsqueda -->
+                    <div>
+                        <h2>Resultados ({{ searchMetrics?.total_results || 0 }})</h2>
+                        <div class="search-results">
+                            <div v-if="searchResults.length === 0" class="empty-state">
+                                No se encontraron resultados para "{{ lastSearchQuery }}"
+                            </div>
+                            <div 
+                                v-for="(result, index) in searchResults" 
+                                :key="index"
+                                class="result-item"
+                            >
+                                <div class="result-score">
+                                    Score: {{ result.score.toFixed(3) }}
+                                </div>
+                                <div class="result-data">
+                                    <div 
+                                        v-for="(value, key) in result.source" 
+                                        :key="key"
+                                        class="result-field"
+                                    >
+                                        <strong>{{ key }}:</strong> {{ value }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Panel de métricas -->
+                    <div class="metrics-panel">
+                        <h3>Métricas de búsqueda</h3>
+                        <div v-if="searchMetrics">
+                            <div class="metric-item">
+                                <span class="metric-label">Consulta:</span>
+                                <span class="metric-value">"{{ searchMetrics.query }}"</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Tiempo total:</span>
+                                <span class="metric-value">{{ searchMetrics.search_time_seconds }}s</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Tiempo ES:</span>
+                                <span class="metric-value">{{ searchMetrics.elasticsearch_took_ms }}ms</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Total encontrados:</span>
+                                <span class="metric-value">{{ searchMetrics.total_results }}</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Devueltos:</span>
+                                <span class="metric-value">{{ searchMetrics.returned_results }}</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Historial de búsquedas -->
+                        <div v-if="searchHistory.length > 0" style="margin-top: 20px;">
+                            <h4>Historial de tiempos</h4>
+                            <canvas ref="metricsChart" width="300" height="200"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
