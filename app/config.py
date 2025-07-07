@@ -1,0 +1,4 @@
+import os
+
+ELASTICSEARCH_HOST = os.getenv("ELASTICSEARCH_HOST", "localhost")
+ELASTICSEARCH_PORT = os.getenv("ELASTICSEARCH_PORT", "9200")
