@@ -1,5 +1,6 @@
 import logging
 import time
+import os
 from fastapi.staticfiles import StaticFiles
 import pandas as pd
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Request
@@ -48,12 +49,12 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 
 
-app.include_router(upload_router)
-app.include_router(search_router)
-app.include_router(indices_router)
+app.include_router(upload_router, prefix="/api")
+app.include_router(search_router, prefix="/api")
+app.include_router(indices_router, prefix="/api")
 
 
-@app.get("/health")
+@app.get("/api/health")
 async def health_check():
     try:
         es_health = es.cluster.health()
@@ -71,5 +72,9 @@ async def health_check():
             "error": str(e),
             "timestamp": time.time()
         }
+
+# Servir el frontend solo en entorno local (cuando no se despliega en Vercel)
+if not os.getenv("VERCEL"):
+    app.mount("/", StaticFiles(directory="frontend", html=True), name="static")
 
 

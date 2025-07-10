@@ -18,7 +18,7 @@ class ElasticsearchManager:
         try:
             if self.es.indices.exists(index=index_name):
                 self.es.indices.delete(index=index_name)
-            self.es.indices.create(index=index_name, body=mapping)
+            self.es.indices.create(index=index_name, body={"mappings": mapping})
             return True
         except Exception as e:
             logger.error(f"❌ Error creando índice {index_name}: {e}")
@@ -105,3 +105,37 @@ class ElasticsearchManager:
             raise HTTPException(status_code=404, detail=f"Índice '{index_name}' no encontrado")
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error en búsqueda: {str(e)}")
+
+    def get_indices(self, prefix: str = None) -> list[dict]:
+        try:
+            # Usar un comodín si se especifica un prefijo
+            index_pattern = f"{prefix}*" if prefix else "*"
+            
+            indices_info = self.es.cat.indices(
+                index=index_pattern, 
+                format="json", 
+                h="index,docs.count,status,health", 
+                s="index:asc"
+            )
+            
+            detailed_indices = []
+            for index_info in indices_info:
+                index_name = index_info['index']
+                if not index_name.startswith('.'):
+                    mapping = self.es.indices.get_mapping(index=index_name)
+                    properties = mapping[index_name]['mappings'].get('properties', {})
+                    columns = [
+                        {"name": name, "type": prop.get("type", "unknown")}
+                        for name, prop in properties.items()
+                    ]
+                    detailed_indices.append({
+                        "name": index_name,
+                        "status": index_info['status'],
+                        "health": index_info['health'],
+                        "doc_count": index_info['docs.count'],
+                        "columns": columns
+                    })
+            return detailed_indices
+        except Exception as e:
+            logger.error(f"❌ Error obteniendo índices: {e}")
+            return []
