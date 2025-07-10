@@ -46,8 +46,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         content={"detail": exc.errors()}
     )
 
-# Montar la carpeta 'frontend' en /static
-app.mount("/static", StaticFiles(directory="frontend", html=True), name="static")
+
 
 app.include_router(upload_router)
 app.include_router(search_router)
@@ -73,6 +72,4 @@ async def health_check():
             "timestamp": time.time()
         }
 
-@app.get("/", response_class=FileResponse)
-async def root():
-    return "frontend/index.html"
+

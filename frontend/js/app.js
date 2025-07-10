@@ -72,7 +72,7 @@ createApp({
 				formData.append('file', this.selectedFile)
 				formData.append('index_name', this.indexName)
 
-				const response = await axios.post('/upload-csv', formData, {
+				const response = await axios.post('/api/upload-csv', formData, {
 					headers: {
 						'Content-Type': 'multipart/form-data',
 					},
@@ -107,7 +107,7 @@ createApp({
 			console.log('📋 Cargando índices...')
 
 			try {
-				const response = await axios.get('/indices')
+				const response = await axios.get('/api/indices')
 				this.indices = response.data.indices
 				console.log('📊 Índices cargados:', this.indices.length)
 
@@ -147,7 +147,7 @@ createApp({
                     .find(i => i.name === this.selectedIndex)
                     ?.columns.filter(c => c.type === 'text').map(c => c.name) || []
 
-				const response = await fetch('/search', {
+				const response = await fetch('/api/search', {
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json'
